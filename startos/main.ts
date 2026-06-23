@@ -3,9 +3,7 @@ import {
   appUrl,
   httpPort,
   log,
-  logRootfsPath,
   mountVolume,
-  probeHttpPort,
   serviceName,
   subcontainerName,
 } from './utils'
@@ -39,17 +37,6 @@ export const main = sdk.setupMain(async ({ effects }) => {
   await subcontainer.writeFile('/etc/passwd', 'root:x:0:0:root:/root:/bin/sh\n')
   await subcontainer.writeFile('/etc/group', 'root:x:0:\n')
   log('Wrote minimal account files for scratch image')
-  await logRootfsPath(subcontainer.rootfs, '/etc/passwd', {
-    label: 'Subcontainer passwd file',
-    readText: true,
-  })
-  await logRootfsPath(subcontainer.rootfs, '/etc/group', {
-    label: 'Subcontainer group file',
-    readText: true,
-  })
-  await logRootfsPath(subcontainer.rootfs, mountVolume.mountpoint, {
-    label: 'Beszel data directory',
-  })
 
   log('Registering Beszel daemon', {
     daemon: serviceName,
@@ -76,12 +63,6 @@ export const main = sdk.setupMain(async ({ effects }) => {
         log('Running Beszel readiness check', {
           attempt: healthCheckAttempt,
           url: `http://127.0.0.1:${httpPort}`,
-        })
-
-        const probe = await probeHttpPort(httpPort)
-        log('Beszel readiness HTTP probe result', {
-          attempt: healthCheckAttempt,
-          probe,
         })
 
         const result = await sdk.healthCheck.checkWebUrl(

@@ -26670,17 +26670,6 @@ exports.main = sdk_1.sdk.setupMain(async ({ effects }) => {
     await subcontainer.writeFile('/etc/passwd', 'root:x:0:0:root:/root:/bin/sh\n');
     await subcontainer.writeFile('/etc/group', 'root:x:0:\n');
     (0, utils_1.log)('Wrote minimal account files for scratch image');
-    await (0, utils_1.logRootfsPath)(subcontainer.rootfs, '/etc/passwd', {
-        label: 'Subcontainer passwd file',
-        readText: true,
-    });
-    await (0, utils_1.logRootfsPath)(subcontainer.rootfs, '/etc/group', {
-        label: 'Subcontainer group file',
-        readText: true,
-    });
-    await (0, utils_1.logRootfsPath)(subcontainer.rootfs, utils_1.mountVolume.mountpoint, {
-        label: 'Beszel data directory',
-    });
     (0, utils_1.log)('Registering Beszel daemon', {
         daemon: utils_1.serviceName,
         command: 'image entrypoint',
@@ -26704,11 +26693,6 @@ exports.main = sdk_1.sdk.setupMain(async ({ effects }) => {
                 (0, utils_1.log)('Running Beszel readiness check', {
                     attempt: healthCheckAttempt,
                     url: `http://127.0.0.1:${utils_1.httpPort}`,
-                });
-                const probe = await (0, utils_1.probeHttpPort)(utils_1.httpPort);
-                (0, utils_1.log)('Beszel readiness HTTP probe result', {
-                    attempt: healthCheckAttempt,
-                    probe,
                 });
                 const result = await sdk_1.sdk.healthCheck.checkWebUrl(effects, `http://127.0.0.1:${utils_1.httpPort}`, {
                     timeout: 60000,
@@ -26745,7 +26729,7 @@ exports.manifest = (0, start_sdk_1.setupManifest)({
     id: 'beszel',
     title: 'Beszel',
     license: 'MIT',
-    packageRepo: 'https://github.com/henrygd/beszel',
+    packageRepo: 'https://github.com/islandbitcoin/beszel-startos',
     upstreamRepo: 'https://github.com/henrygd/beszel',
     marketingUrl: 'https://beszel.dev',
     donationUrl: null,
@@ -26787,18 +26771,13 @@ exports.sdk = start_sdk_1.StartSdk.of().withManifest(manifest_1.manifest).build(
 /***/ }),
 
 /***/ 1225:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+/***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.mountVolume = exports.appUrl = exports.httpPort = exports.webMultiHostId = exports.webInterfaceId = exports.subcontainerName = exports.serviceName = exports.packageLogPrefix = void 0;
 exports.log = log;
-exports.formatError = formatError;
-exports.logRootfsPath = logRootfsPath;
-exports.probeHttpPort = probeHttpPort;
-const { readdir, readFile, stat } = (__nccwpck_require__(9896).promises);
-const { request } = __nccwpck_require__(8611);
 exports.packageLogPrefix = 'beszel-startos';
 exports.serviceName = 'beszel';
 exports.subcontainerName = 'beszel';
@@ -26822,100 +26801,6 @@ function log(message, details) {
         console.log(`${prefix} ${message}`, details);
     }
 }
-function formatError(error) {
-    if (error instanceof Error)
-        return `${error.name}: ${error.message}`;
-    return String(error);
-}
-async function logRootfsPath(rootfs, path, options = { label: path }) {
-    const fullPath = `${rootfs}${path}`;
-    try {
-        const pathStat = await stat(fullPath);
-        log(`${options.label} exists`, {
-            path,
-            fullPath,
-            isDirectory: pathStat.isDirectory(),
-            isFile: pathStat.isFile(),
-            mode: `0${(pathStat.mode & 0o777).toString(8)}`,
-            size: pathStat.size,
-        });
-        if (pathStat.isDirectory()) {
-            const entries = await readdir(fullPath);
-            log(`${options.label} directory entries`, {
-                path,
-                entries: entries.slice(0, 20),
-                totalEntries: entries.length,
-            });
-        }
-        else if (options.readText) {
-            const content = await readFile(fullPath, 'utf8');
-            log(`${options.label} content`, {
-                path,
-                content,
-            });
-        }
-    }
-    catch (error) {
-        log(`${options.label} probe failed`, {
-            path,
-            fullPath,
-            error: formatError(error),
-        });
-    }
-}
-async function probeHttpPort(port, path = '/') {
-    const started = Date.now();
-    return new Promise((resolve) => {
-        const req = request({
-            hostname: '127.0.0.1',
-            port,
-            path,
-            method: 'GET',
-            timeout: 5000,
-        }, (res) => {
-            let bodyPreview = '';
-            res.setEncoding('utf8');
-            res.on('data', (chunk) => {
-                if (bodyPreview.length >= 1024)
-                    return;
-                const remaining = 1024 - bodyPreview.length;
-                bodyPreview += chunk.slice(0, remaining);
-            });
-            res.on('end', () => {
-                resolve({
-                    ok: true,
-                    statusCode: res.statusCode,
-                    headers: sanitizeHeaders(res.headers),
-                    bodyPreview,
-                    elapsedMs: Date.now() - started,
-                });
-            });
-        });
-        req.on('timeout', () => {
-            req.destroy(new Error('HTTP probe timed out'));
-        });
-        req.on('error', (error) => {
-            resolve({
-                ok: false,
-                error: formatError(error),
-                elapsedMs: Date.now() - started,
-            });
-        });
-        req.end();
-    });
-}
-function sanitizeHeaders(headers) {
-    const sanitized = {};
-    for (const [key, value] of Object.entries(headers)) {
-        if (key.toLowerCase() === 'set-cookie') {
-            sanitized[key] = '[redacted]';
-        }
-        else {
-            sanitized[key] = value;
-        }
-    }
-    return sanitized;
-}
 
 
 /***/ }),
@@ -26929,9 +26814,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.current = void 0;
 const start_sdk_1 = __nccwpck_require__(1098);
 exports.current = start_sdk_1.VersionInfo.of({
-    version: '0.9.1:4',
+    version: '0.9.1:5',
     releaseNotes: {
-        en_US: 'Register the Beszel daemon correctly so StartOS starts the service after exporting the web interface.',
+        en_US: 'Polish package metadata and keep the working daemon registration with cleaner startup logs.',
     },
     migrations: {
         up: async () => { },
@@ -26988,14 +26873,6 @@ module.exports = require("child_process");
 
 "use strict";
 module.exports = require("crypto");
-
-/***/ }),
-
-/***/ 9896:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("fs");
 
 /***/ }),
 

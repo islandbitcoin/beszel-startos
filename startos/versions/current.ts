@@ -1,9 +1,9 @@
 import { VersionInfo, IMPOSSIBLE } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '0.9.1:4',
+  version: '0.9.1:5',
   releaseNotes: {
-    en_US: 'Register the Beszel daemon correctly so StartOS starts the service after exporting the web interface.',
+    en_US: 'Polish package metadata and keep the working daemon registration with cleaner startup logs.',
   },
   migrations: {
     up: async () => {},
