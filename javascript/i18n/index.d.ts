@@ -1,0 +1,1 @@
+export declare const i18n: (key: "Web Interface" | "Beszel is ready" | "Beszel is still starting. If this persists, please check the logs." | "Web-based dashboard for viewing system metrics and managing monitored systems" | "Starting Beszel!", params?: Record<string, string | number | Date>) => string;
