@@ -26796,8 +26796,8 @@ exports.log = log;
 exports.formatError = formatError;
 exports.logRootfsPath = logRootfsPath;
 exports.probeHttpPort = probeHttpPort;
-const promises_1 = __nccwpck_require__(1455);
-const node_http_1 = __nccwpck_require__(7067);
+const { readdir, readFile, stat } = (__nccwpck_require__(9896).promises);
+const { request } = __nccwpck_require__(8611);
 exports.packageLogPrefix = 'beszel-startos';
 exports.serviceName = 'beszel';
 exports.subcontainerName = 'beszel';
@@ -26829,7 +26829,7 @@ function formatError(error) {
 async function logRootfsPath(rootfs, path, options = { label: path }) {
     const fullPath = `${rootfs}${path}`;
     try {
-        const pathStat = await (0, promises_1.stat)(fullPath);
+        const pathStat = await stat(fullPath);
         log(`${options.label} exists`, {
             path,
             fullPath,
@@ -26839,7 +26839,7 @@ async function logRootfsPath(rootfs, path, options = { label: path }) {
             size: pathStat.size,
         });
         if (pathStat.isDirectory()) {
-            const entries = await (0, promises_1.readdir)(fullPath);
+            const entries = await readdir(fullPath);
             log(`${options.label} directory entries`, {
                 path,
                 entries: entries.slice(0, 20),
@@ -26847,7 +26847,7 @@ async function logRootfsPath(rootfs, path, options = { label: path }) {
             });
         }
         else if (options.readText) {
-            const content = await (0, promises_1.readFile)(fullPath, 'utf8');
+            const content = await readFile(fullPath, 'utf8');
             log(`${options.label} content`, {
                 path,
                 content,
@@ -26865,29 +26865,27 @@ async function logRootfsPath(rootfs, path, options = { label: path }) {
 async function probeHttpPort(port, path = '/') {
     const started = Date.now();
     return new Promise((resolve) => {
-        const req = (0, node_http_1.request)({
+        const req = request({
             hostname: '127.0.0.1',
             port,
             path,
             method: 'GET',
             timeout: 5000,
         }, (res) => {
-            const chunks = [];
-            let capturedBytes = 0;
+            let bodyPreview = '';
+            res.setEncoding('utf8');
             res.on('data', (chunk) => {
-                if (capturedBytes >= 1024)
+                if (bodyPreview.length >= 1024)
                     return;
-                const remaining = 1024 - capturedBytes;
-                const slice = chunk.subarray(0, remaining);
-                chunks.push(slice);
-                capturedBytes += slice.length;
+                const remaining = 1024 - bodyPreview.length;
+                bodyPreview += chunk.slice(0, remaining);
             });
             res.on('end', () => {
                 resolve({
                     ok: true,
                     statusCode: res.statusCode,
                     headers: sanitizeHeaders(res.headers),
-                    bodyPreview: Buffer.concat(chunks).toString('utf8'),
+                    bodyPreview,
                     elapsedMs: Date.now() - started,
                 });
             });
@@ -26992,6 +26990,14 @@ module.exports = require("crypto");
 
 /***/ }),
 
+/***/ 9896:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("fs");
+
+/***/ }),
+
 /***/ 1943:
 /***/ ((module) => {
 
@@ -27045,14 +27051,6 @@ module.exports = require("node:crypto");
 
 "use strict";
 module.exports = require("node:fs/promises");
-
-/***/ }),
-
-/***/ 7067:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("node:http");
 
 /***/ }),
 

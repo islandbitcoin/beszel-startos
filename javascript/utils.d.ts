@@ -1,3 +1,4 @@
+type HeaderValue = string | string[] | number | undefined;
 export declare const packageLogPrefix = "beszel-startos";
 export declare const serviceName = "beszel";
 export declare const subcontainerName = "beszel";
@@ -15,7 +16,7 @@ export declare const mountVolume: {
 type HttpProbeResult = {
     ok: true;
     statusCode: number | undefined;
-    headers: Record<string, string | string[] | number | undefined>;
+    headers: Record<string, HeaderValue>;
     bodyPreview: string;
     elapsedMs: number;
 } | {

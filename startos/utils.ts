@@ -1,5 +1,51 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
-import { request, type IncomingHttpHeaders } from 'node:http'
+declare const require: (moduleName: string) => unknown
+
+type FileStat = {
+  isDirectory(): boolean
+  isFile(): boolean
+  mode: number
+  size: number
+}
+
+type FsPromises = {
+  readdir(path: string): Promise<string[]>
+  readFile(path: string, encoding: 'utf8'): Promise<string>
+  stat(path: string): Promise<FileStat>
+}
+
+type HeaderValue = string | string[] | number | undefined
+
+type HttpResponse = {
+  statusCode?: number
+  headers: Record<string, HeaderValue>
+  setEncoding(encoding: 'utf8'): void
+  on(event: 'data', callback: (chunk: string) => void): void
+  on(event: 'end', callback: () => void): void
+}
+
+type HttpRequest = {
+  on(event: 'timeout', callback: () => void): void
+  on(event: 'error', callback: (error: unknown) => void): void
+  destroy(error: Error): void
+  end(): void
+}
+
+type HttpModule = {
+  request(
+    options: {
+      hostname: string
+      port: number
+      path: string
+      method: 'GET'
+      timeout: number
+    },
+    callback: (res: HttpResponse) => void,
+  ): HttpRequest
+}
+
+const { readdir, readFile, stat } = (require('fs') as { promises: FsPromises })
+  .promises
+const { request } = require('http') as HttpModule
 
 export const packageLogPrefix = 'beszel-startos'
 export const serviceName = 'beszel'
@@ -21,7 +67,7 @@ type HttpProbeResult =
   | {
       ok: true
       statusCode: number | undefined
-      headers: Record<string, string | string[] | number | undefined>
+      headers: Record<string, HeaderValue>
       bodyPreview: string
       elapsedMs: number
     }
@@ -102,15 +148,13 @@ export async function probeHttpPort(
         timeout: 5_000,
       },
       (res) => {
-        const chunks: Buffer[] = []
-        let capturedBytes = 0
+        let bodyPreview = ''
+        res.setEncoding('utf8')
 
-        res.on('data', (chunk: Buffer) => {
-          if (capturedBytes >= 1024) return
-          const remaining = 1024 - capturedBytes
-          const slice = chunk.subarray(0, remaining)
-          chunks.push(slice)
-          capturedBytes += slice.length
+        res.on('data', (chunk) => {
+          if (bodyPreview.length >= 1024) return
+          const remaining = 1024 - bodyPreview.length
+          bodyPreview += chunk.slice(0, remaining)
         })
 
         res.on('end', () => {
@@ -118,7 +162,7 @@ export async function probeHttpPort(
             ok: true,
             statusCode: res.statusCode,
             headers: sanitizeHeaders(res.headers),
-            bodyPreview: Buffer.concat(chunks).toString('utf8'),
+            bodyPreview,
             elapsedMs: Date.now() - started,
           })
         })
@@ -141,8 +185,8 @@ export async function probeHttpPort(
   })
 }
 
-function sanitizeHeaders(headers: IncomingHttpHeaders) {
-  const sanitized: Record<string, string | string[] | number | undefined> = {}
+function sanitizeHeaders(headers: Record<string, HeaderValue>) {
+  const sanitized: Record<string, HeaderValue> = {}
 
   for (const [key, value] of Object.entries(headers)) {
     if (key.toLowerCase() === 'set-cookie') {
