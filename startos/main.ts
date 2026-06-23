@@ -51,7 +51,6 @@ export const main = sdk.setupMain(async ({ effects }) => {
     label: 'Beszel data directory',
   })
 
-  const daemons = sdk.Daemons.of(effects)
   log('Registering Beszel daemon', {
     daemon: serviceName,
     command: 'image entrypoint',
@@ -62,7 +61,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
 
   let healthCheckAttempt = 0
 
-  daemons.addDaemon(serviceName, {
+  const daemons = sdk.Daemons.of(effects).addDaemon(serviceName, {
     subcontainer,
     exec: {
       command: sdk.useEntrypoint(),
@@ -104,6 +103,8 @@ export const main = sdk.setupMain(async ({ effects }) => {
     requires: [],
   })
 
-  log('Main service setup complete')
+  log('Main service setup complete', {
+    daemon: serviceName,
+  })
   return daemons
 })

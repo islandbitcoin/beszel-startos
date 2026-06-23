@@ -26681,7 +26681,6 @@ exports.main = sdk_1.sdk.setupMain(async ({ effects }) => {
     await (0, utils_1.logRootfsPath)(subcontainer.rootfs, utils_1.mountVolume.mountpoint, {
         label: 'Beszel data directory',
     });
-    const daemons = sdk_1.sdk.Daemons.of(effects);
     (0, utils_1.log)('Registering Beszel daemon', {
         daemon: utils_1.serviceName,
         command: 'image entrypoint',
@@ -26690,7 +26689,7 @@ exports.main = sdk_1.sdk.setupMain(async ({ effects }) => {
         },
     });
     let healthCheckAttempt = 0;
-    daemons.addDaemon(utils_1.serviceName, {
+    const daemons = sdk_1.sdk.Daemons.of(effects).addDaemon(utils_1.serviceName, {
         subcontainer,
         exec: {
             command: sdk_1.sdk.useEntrypoint(),
@@ -26725,7 +26724,9 @@ exports.main = sdk_1.sdk.setupMain(async ({ effects }) => {
         },
         requires: [],
     });
-    (0, utils_1.log)('Main service setup complete');
+    (0, utils_1.log)('Main service setup complete', {
+        daemon: utils_1.serviceName,
+    });
     return daemons;
 });
 
@@ -26928,9 +26929,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.current = void 0;
 const start_sdk_1 = __nccwpck_require__(1098);
 exports.current = start_sdk_1.VersionInfo.of({
-    version: '0.9.1:3',
+    version: '0.9.1:4',
     releaseNotes: {
-        en_US: 'Fix package JavaScript permissions and keep detailed startup diagnostics for troubleshooting StartOS proxy issues.',
+        en_US: 'Register the Beszel daemon correctly so StartOS starts the service after exporting the web interface.',
     },
     migrations: {
         up: async () => { },
