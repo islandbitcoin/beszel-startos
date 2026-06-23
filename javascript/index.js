@@ -26601,9 +26601,14 @@ exports.setInterfaces = void 0;
 const sdk_1 = __nccwpck_require__(5811);
 const utils_1 = __nccwpck_require__(1225);
 exports.setInterfaces = sdk_1.sdk.setupInterfaces(async ({ effects }) => {
+    (0, utils_1.log)('Setting up web interface', {
+        interfaceId: utils_1.webInterfaceId,
+        multiHostId: utils_1.webMultiHostId,
+        httpPort: utils_1.httpPort,
+    });
     const webInterface = sdk_1.sdk.createInterface(effects, {
         name: 'Web UI',
-        id: 'web-ui',
+        id: utils_1.webInterfaceId,
         description: 'Web-based dashboard for viewing system metrics and managing monitored systems',
         type: 'ui',
         masked: false,
@@ -26612,9 +26617,23 @@ exports.setInterfaces = sdk_1.sdk.setupInterfaces(async ({ effects }) => {
         path: '',
         query: {},
     });
-    const multi = sdk_1.sdk.MultiHost.of(effects, 'web-multi');
+    (0, utils_1.log)('Web interface descriptor created', {
+        interfaceId: utils_1.webInterfaceId,
+        name: 'Web UI',
+        type: 'ui',
+    });
+    const multi = sdk_1.sdk.MultiHost.of(effects, utils_1.webMultiHostId);
+    (0, utils_1.log)('Binding web interface port', {
+        multiHostId: utils_1.webMultiHostId,
+        httpPort: utils_1.httpPort,
+        protocol: 'http',
+    });
     const multiOrigin = await multi.bindPort(utils_1.httpPort, { protocol: 'http' });
     const receipt = await multiOrigin.export([webInterface]);
+    (0, utils_1.log)('Web interface exported', {
+        interfaceId: utils_1.webInterfaceId,
+        receipt,
+    });
     return [receipt];
 });
 
@@ -26631,32 +26650,82 @@ exports.main = void 0;
 const sdk_1 = __nccwpck_require__(5811);
 const utils_1 = __nccwpck_require__(1225);
 exports.main = sdk_1.sdk.setupMain(async ({ effects }) => {
+    (0, utils_1.log)('Setting up main service', {
+        serviceName: utils_1.serviceName,
+        httpPort: utils_1.httpPort,
+        appUrl: utils_1.appUrl,
+        mountpoint: utils_1.mountVolume.mountpoint,
+    });
     const mounts = sdk_1.sdk.Mounts.of().mountVolume(utils_1.mountVolume);
-    const subcontainer = await sdk_1.sdk.SubContainer.of(effects, { imageId: 'beszel' }, mounts, 'beszel');
+    (0, utils_1.log)('Mount configuration created', utils_1.mountVolume);
+    const subcontainer = await sdk_1.sdk.SubContainer.of(effects, { imageId: utils_1.serviceName }, mounts, utils_1.subcontainerName);
+    (0, utils_1.log)('Subcontainer created', {
+        imageId: utils_1.serviceName,
+        subcontainerName: utils_1.subcontainerName,
+        rootfs: subcontainer.rootfs,
+    });
     // The beszel Docker image is FROM scratch — it has no /etc/passwd or /etc/group.
     // start-container subcontainer exec requires these files to resolve the user,
     // so we write minimal entries before the daemon spawns commands.
     await subcontainer.writeFile('/etc/passwd', 'root:x:0:0:root:/root:/bin/sh\n');
     await subcontainer.writeFile('/etc/group', 'root:x:0:\n');
+    (0, utils_1.log)('Wrote minimal account files for scratch image');
+    await (0, utils_1.logRootfsPath)(subcontainer.rootfs, '/etc/passwd', {
+        label: 'Subcontainer passwd file',
+        readText: true,
+    });
+    await (0, utils_1.logRootfsPath)(subcontainer.rootfs, '/etc/group', {
+        label: 'Subcontainer group file',
+        readText: true,
+    });
+    await (0, utils_1.logRootfsPath)(subcontainer.rootfs, utils_1.mountVolume.mountpoint, {
+        label: 'Beszel data directory',
+    });
     const daemons = sdk_1.sdk.Daemons.of(effects);
-    daemons.addDaemon('beszel', {
+    (0, utils_1.log)('Registering Beszel daemon', {
+        daemon: utils_1.serviceName,
+        command: 'image entrypoint',
+        env: {
+            APP_URL: utils_1.appUrl,
+        },
+    });
+    let healthCheckAttempt = 0;
+    daemons.addDaemon(utils_1.serviceName, {
         subcontainer,
         exec: {
             command: sdk_1.sdk.useEntrypoint(),
             env: {
-                APP_URL: 'https://beszel.embassy',
+                APP_URL: utils_1.appUrl,
             },
         },
         ready: {
             display: 'Web Interface',
-            fn: () => sdk_1.sdk.healthCheck.checkWebUrl(effects, `http://127.0.0.1:${utils_1.httpPort}`, {
-                timeout: 60000,
-                successMessage: 'Beszel is ready',
-                errorMessage: 'Beszel is still starting. If this persists, please check the logs.',
-            }),
+            fn: async () => {
+                healthCheckAttempt += 1;
+                (0, utils_1.log)('Running Beszel readiness check', {
+                    attempt: healthCheckAttempt,
+                    url: `http://127.0.0.1:${utils_1.httpPort}`,
+                });
+                const probe = await (0, utils_1.probeHttpPort)(utils_1.httpPort);
+                (0, utils_1.log)('Beszel readiness HTTP probe result', {
+                    attempt: healthCheckAttempt,
+                    probe,
+                });
+                const result = await sdk_1.sdk.healthCheck.checkWebUrl(effects, `http://127.0.0.1:${utils_1.httpPort}`, {
+                    timeout: 60000,
+                    successMessage: 'Beszel is ready',
+                    errorMessage: 'Beszel is still starting. If this persists, please check the logs.',
+                });
+                (0, utils_1.log)('Beszel SDK health check result', {
+                    attempt: healthCheckAttempt,
+                    result,
+                });
+                return result;
+            },
         },
         requires: [],
     });
+    (0, utils_1.log)('Main service setup complete');
     return daemons;
 });
 
@@ -26717,19 +26786,137 @@ exports.sdk = start_sdk_1.StartSdk.of().withManifest(manifest_1.manifest).build(
 /***/ }),
 
 /***/ 1225:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.mountVolume = exports.httpPort = void 0;
+exports.mountVolume = exports.appUrl = exports.httpPort = exports.webMultiHostId = exports.webInterfaceId = exports.subcontainerName = exports.serviceName = exports.packageLogPrefix = void 0;
+exports.log = log;
+exports.formatError = formatError;
+exports.logRootfsPath = logRootfsPath;
+exports.probeHttpPort = probeHttpPort;
+const promises_1 = __nccwpck_require__(1455);
+const node_http_1 = __nccwpck_require__(7067);
+exports.packageLogPrefix = 'beszel-startos';
+exports.serviceName = 'beszel';
+exports.subcontainerName = 'beszel';
+exports.webInterfaceId = 'web-ui';
+exports.webMultiHostId = 'web-multi';
 exports.httpPort = 8090;
+exports.appUrl = 'https://beszel.embassy';
 exports.mountVolume = {
     volumeId: 'main',
     subpath: null,
     mountpoint: '/beszel_data',
     readonly: false,
+    type: 'directory',
 };
+function log(message, details) {
+    const prefix = `[${exports.packageLogPrefix} ${new Date().toISOString()}]`;
+    if (details === undefined) {
+        console.log(`${prefix} ${message}`);
+    }
+    else {
+        console.log(`${prefix} ${message}`, details);
+    }
+}
+function formatError(error) {
+    if (error instanceof Error)
+        return `${error.name}: ${error.message}`;
+    return String(error);
+}
+async function logRootfsPath(rootfs, path, options = { label: path }) {
+    const fullPath = `${rootfs}${path}`;
+    try {
+        const pathStat = await (0, promises_1.stat)(fullPath);
+        log(`${options.label} exists`, {
+            path,
+            fullPath,
+            isDirectory: pathStat.isDirectory(),
+            isFile: pathStat.isFile(),
+            mode: `0${(pathStat.mode & 0o777).toString(8)}`,
+            size: pathStat.size,
+        });
+        if (pathStat.isDirectory()) {
+            const entries = await (0, promises_1.readdir)(fullPath);
+            log(`${options.label} directory entries`, {
+                path,
+                entries: entries.slice(0, 20),
+                totalEntries: entries.length,
+            });
+        }
+        else if (options.readText) {
+            const content = await (0, promises_1.readFile)(fullPath, 'utf8');
+            log(`${options.label} content`, {
+                path,
+                content,
+            });
+        }
+    }
+    catch (error) {
+        log(`${options.label} probe failed`, {
+            path,
+            fullPath,
+            error: formatError(error),
+        });
+    }
+}
+async function probeHttpPort(port, path = '/') {
+    const started = Date.now();
+    return new Promise((resolve) => {
+        const req = (0, node_http_1.request)({
+            hostname: '127.0.0.1',
+            port,
+            path,
+            method: 'GET',
+            timeout: 5000,
+        }, (res) => {
+            const chunks = [];
+            let capturedBytes = 0;
+            res.on('data', (chunk) => {
+                if (capturedBytes >= 1024)
+                    return;
+                const remaining = 1024 - capturedBytes;
+                const slice = chunk.subarray(0, remaining);
+                chunks.push(slice);
+                capturedBytes += slice.length;
+            });
+            res.on('end', () => {
+                resolve({
+                    ok: true,
+                    statusCode: res.statusCode,
+                    headers: sanitizeHeaders(res.headers),
+                    bodyPreview: Buffer.concat(chunks).toString('utf8'),
+                    elapsedMs: Date.now() - started,
+                });
+            });
+        });
+        req.on('timeout', () => {
+            req.destroy(new Error('HTTP probe timed out'));
+        });
+        req.on('error', (error) => {
+            resolve({
+                ok: false,
+                error: formatError(error),
+                elapsedMs: Date.now() - started,
+            });
+        });
+        req.end();
+    });
+}
+function sanitizeHeaders(headers) {
+    const sanitized = {};
+    for (const [key, value] of Object.entries(headers)) {
+        if (key.toLowerCase() === 'set-cookie') {
+            sanitized[key] = '[redacted]';
+        }
+        else {
+            sanitized[key] = value;
+        }
+    }
+    return sanitized;
+}
 
 
 /***/ }),
@@ -26743,9 +26930,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.current = void 0;
 const start_sdk_1 = __nccwpck_require__(1098);
 exports.current = start_sdk_1.VersionInfo.of({
-    version: '0.9.1:1',
+    version: '0.9.1:2',
     releaseNotes: {
-        en_US: 'Fix startup under StartOS by adding minimal account files for the scratch image and setting the public app URL.',
+        en_US: 'Add detailed startup, interface, filesystem, and readiness diagnostics for troubleshooting StartOS proxy issues.',
     },
     migrations: {
         up: async () => { },
@@ -26858,6 +27045,14 @@ module.exports = require("node:crypto");
 
 "use strict";
 module.exports = require("node:fs/promises");
+
+/***/ }),
+
+/***/ 7067:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:http");
 
 /***/ }),
 
