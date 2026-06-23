@@ -11,13 +11,21 @@ export const main = sdk.setupMain(async ({ effects }) => {
     'beszel',
   )
 
+  // The beszel Docker image is FROM scratch — it has no /etc/passwd or /etc/group.
+  // start-container subcontainer exec requires these files to resolve the user,
+  // so we write minimal entries before the daemon spawns commands.
+  await subcontainer.writeFile('/etc/passwd', 'root:x:0:0:root:/root:/bin/sh\n')
+  await subcontainer.writeFile('/etc/group', 'root:x:0:\n')
+
   const daemons = sdk.Daemons.of(effects)
 
   daemons.addDaemon('beszel', {
     subcontainer,
     exec: {
       command: sdk.useEntrypoint(),
-      env: {},
+      env: {
+        APP_URL: 'https://beszel.embassy',
+      },
     },
     ready: {
       display: 'Web Interface',

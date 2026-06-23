@@ -26633,12 +26633,19 @@ const utils_1 = __nccwpck_require__(1225);
 exports.main = sdk_1.sdk.setupMain(async ({ effects }) => {
     const mounts = sdk_1.sdk.Mounts.of().mountVolume(utils_1.mountVolume);
     const subcontainer = await sdk_1.sdk.SubContainer.of(effects, { imageId: 'beszel' }, mounts, 'beszel');
+    // The beszel Docker image is FROM scratch — it has no /etc/passwd or /etc/group.
+    // start-container subcontainer exec requires these files to resolve the user,
+    // so we write minimal entries before the daemon spawns commands.
+    await subcontainer.writeFile('/etc/passwd', 'root:x:0:0:root:/root:/bin/sh\n');
+    await subcontainer.writeFile('/etc/group', 'root:x:0:\n');
     const daemons = sdk_1.sdk.Daemons.of(effects);
     daemons.addDaemon('beszel', {
         subcontainer,
         exec: {
             command: sdk_1.sdk.useEntrypoint(),
-            env: {},
+            env: {
+                APP_URL: 'https://beszel.embassy',
+            },
         },
         ready: {
             display: 'Web Interface',
@@ -26736,9 +26743,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.current = void 0;
 const start_sdk_1 = __nccwpck_require__(1098);
 exports.current = start_sdk_1.VersionInfo.of({
-    version: '0.9.1:0',
+    version: '0.9.1:1',
     releaseNotes: {
-        en_US: 'Initial release of Beszel for StartOS.',
+        en_US: 'Fix startup under StartOS by adding minimal account files for the scratch image and setting the public app URL.',
     },
     migrations: {
         up: async () => { },
